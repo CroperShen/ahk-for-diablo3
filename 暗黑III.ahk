@@ -1,6 +1,6 @@
 SetKeyDelay -1
 
-global TESTMODE:=1 ;测试模式
+global TESTMODE:=0 ;测试模式
 ;==============================================================================================
 ;                                   定义全局函数
 ;================================================================================================
@@ -65,12 +65,6 @@ RegisterKey(keyname,funcname,o){
     }
 }
 
-donothing(){
-    debugmsg("do nothing")
-    sleep 10
-    send {shift down}
-    return
-}
 ;====================================================================================
 ;                                  测试代码
 ;====================================================================================
@@ -85,15 +79,22 @@ if (TESTMODE==0){      ;|
 ;----------
 TESTEND: ;|
 ;----------
+
+class Module{
+    
+}
 ;=====================================================================================
 ;                                    维尔棒棒糖套
 ;=====================================================================================
-global EX_intrvl:=600        ;默认按1的时间间隔
-global EXMode:=-1            ;变身剩余时间
-global EXScript_defalutOn:=1 ;默认维尔脚本开启
+global EX_timer_intrvl:=600    ;默认按1的时间间隔
+global EX_remain_time:=-1      ;变身剩余时间
+global EX_AutoleftMode:=0
+;技能按键
+global 御法者:=4
 
-;判断是否处于变身状态
-inEXmode(){
+
+;判断是否处于变身状态,根据显卡和分辨率不同，需要自己修改
+EX_inEXmode(){
     x:=845
     y:=1014
     pixelgetcolor c,x,y 
@@ -104,17 +105,16 @@ inEXmode(){
 }
 
 ;进入变身状态
-EnterEXMode(){
-    if (EXMode>0){
+EX_EnterEXMode(){
+    if (EX_remain_time>0){
         return
     }
-
     ;在0.5s类判断6次是否处于变身状态
     i:=0
-    ret:=inEXmode()
+    ret:=EX_inEXmode()
     while (ret == 0 && i<5){
         sleep 100
-        ret:=inEXmode()
+        ret:=EX_inEXmode()
         i++
     }
 
@@ -122,82 +122,99 @@ EnterEXMode(){
     if (ret == 0){
         return
     }
-    
     debugmsg("进入变身状态")
+
     ;开启计时器
-    fn:=Func("AutoPress1")
-    EXmode:=20000-100*i-500
+    fn:=Func("EX_mainTimer")
+    EX_remain_time:=20000-100*i-500
     send 2
-    SetTimer,% fn,%EX_intrvl%
+    SetTimer,% fn,%EX_timer_intrvl%
 
     ;注册变身期间左键设置
-    EnterAutoLeft() 
-    RegisterKey("$LButton","EX_LButtonDown",1)
-    RegisterKey("$LButton Up","EX_LButtonUp",1)
-    RegisterKey("$+LButton","EX_LButtonDown",1)
-    RegisterKey("$+LButton Up","EX_LButtonUp",1)
-}
-
-;退出变身状态
-QuitEXMode(){
-    debugmsg("尝试退出变身状态")
-    if (ExMode>=0){
-        ExMode:=-1
-        debugmsg("退出变身状态")
-
-        ;关闭计时器
-        fn:=Func("AutoPress1")
-        SetTimer,% fn,Off
-
-        ;注销变身期间左键设置
-        RegisterKey("$LButton","EX_LButtonDown",0)
-        RegisterKey("$LButton Up","EX_LButtonUp",0)
-        RegisterKey("$+LButton","EX_LButtonDown",0)
-        RegisterKey("$+LButton Up","EX_LButtonUp",0)     
-        sleep 50  
-        QuitAutoLeft()
+    if (EX_AutoLeftMode){
+        debugmsg("进入变身：注册重新按下shift事件")
+        EX_EnterAutoLeft() 
+        RegisterKey("$LButton","EX_LButtonDown",1)
+        RegisterKey("$LButton Up","EX_LButtonUp",1)
+        RegisterKey("$+LButton","EX_LButtonDown",1)
+        RegisterKey("$+LButton Up","EX_LButtonUp",1)
     }
 }
 
-;自动按1
-AutoPress1(){
-    EXmode-=EX_intrvl
-    a:="EXMode==" EXMode " keystate=shitf:" GetKeyState("shift") " lbutton:" GetKeyState("Lbutton")
+;退出变身状态
+EX_QuitEXMode(){
+    debugmsg("尝试退出变身状态")
+    if (EX_remain_time>=0){
+        EX_remain_time:=-1
+        debugmsg("退出变身状态")
+
+        ;关闭计时器
+        fn:=Func("EX_mainTimer")
+        SetTimer,% fn,Off
+
+        ;注销变身期间左键设置
+        if (EX_AutoLeftMode){
+            debugmsg("注销变身期间左键设置")
+            RegisterKey("$LButton","EX_LButtonDown",0)
+            RegisterKey("$LButton Up","EX_LButtonUp",0)
+            RegisterKey("$+LButton","EX_LButtonDown",0)
+            RegisterKey("$+LButton Up","EX_LButtonUp",0)     
+            sleep 50  
+            debugmsg("退出变身：注销自动按下左键")
+            EX_QuitAutoLeft()
+        }
+    }
+}
+
+;主循环
+EX_mainTimer(){
+    EX_remain_time-=EX_timer_intrvl
+    a:="EX_remain_time==" EX_remain_time " keystate=shitf:" GetKeyState("shift") " lbutton:" GetKeyState("Lbutton")
     debugmsg(a)
-    if (EXmode<=0){
-        EXmode:=0
-        QuitEXMode()
+    if (EX_remain_time<=0){
+        EX_remain_time:=0
+        EX_QuitEXMode()
         return
     }
     send 1
 }
 
 ;变身期间自动左键
-global autoleftmode:=0
-EnterAutoLeft(){
+;经试验，无法拦截shift up事件，只能再次按下
+EX_shiftUp_Problem(){
+    debugmsg("重新按下shift")
+    sleep 10
+    send {shift down}
+    return
+}
+
+EX_EnterAutoLeft(){
     if (GetKeyState("shift","P")==0){
         debugmsg("虚拟按下shift")
         send {shift down}
     }
     send {Lbutton down}
-    RegisterKey("$shift up","donothing",1)
+    debugmsg("注册shift重新按下shift事件")
+    RegisterKey("$shift up","EX_shiftUp_Problem",1)
 
 }
 
+
 ;退出变身期间自动左键
-QuitAutoLeft(){
+EX_QuitAutoLeft(){
     if (GetKeyState("shift","P")==0){
         send {shift up}
     }
     sleep 10
     send {Lbutton up}
-    RegisterKey("$shift up","donothing",0)
+    debugmsg("注销shift重新按下shift事件")
+    RegisterKey("$shift up","EX_shiftUp_Problem",0)
 }
 
 ;变身期间鼠标左键事件
 EX_LButtonDown(){
     debugmsg("变身期间左键按下")
-    QuitAutoLeft()
+    EX_QuitAutoLeft()
     sleep 10
     send {Lbutton down}
 }
@@ -206,59 +223,124 @@ EX_LButtonUp(){
     debugmsg("变身期间左键松开")
     send {Lbutton Up}
     sleep 10
-    EnterAutoLeft()
+    if (EX_remain_time>300){
+        a:="变身期间左键松开：注册重新按下shift事件 EX_remain_time=" EX_remain_time
+        debugmsg(a)
+        EX_EnterAutoLeft()
+    }
 }
 
 ;开启维尔脚本
 OpenEXFunc(){
     global EXScript_state:=1
-    printm("开启维尔脚本")
-    RegisterKey("~4","EnterEXMode",1)
-    RegisterKey("~m","QuitEXMode",1)
-    RegisterKey("~esc","QuitEXMode",1)
-    RegisterKey("~alt","QuitEXMode",1)
-    RegisterKey("~+m","QuitEXMode",1)
-    RegisterKey("~+esc","QuitEXMode",1)
-    RegisterKey("~+alt","QuitEXMode",1)
+
 
 }
 
 ;关闭维尔脚本
 CloseEXFunc(){
-    global EXScript_state:=0
-    printm("关闭维尔脚本")
-    RegisterKey("~4","EnterEXMode",0)
-    RegisterKey("~m","QuitEXMode",0)
-    RegisterKey("~esc","QuitEXMode",0)
-    RegisterKey("~alt","QuitEXMode",0)
-    RegisterKey("~+m","QuitEXMode",0)
-    RegisterKey("~+esc","QuitEXMode",0)
-    RegisterKey("~+alt","QuitEXMode",0)
+
 }
 
 ;切换维尔脚本
-ToggleEXFunc(){
-    global EXScript_state
-    if (EXScript_state==0){
-        OpenEXFunc()
+EX_ToggleScript(){
+    static script_state:=0
+    exkey:="~" 御法者
+    if (script_state==0){
+        script_state:=1
+        printm("开启维尔脚本")
+        if (EX_AutoLeftMode){
+            printm("变身期间自动左键已开启，按f6关闭")
+        }
+        else{
+            printm("变身期间自动左键已关闭，按f6开启")
+        }
+        RegisterKey(exkey,"EX_EnterEXMode",1)
+        RegisterKey("~m","EX_QuitEXMode",1)
+        RegisterKey("~esc","EX_QuitEXMode",1)
+        RegisterKey("~alt","EX_QuitEXMode",1)
+        RegisterKey("~+m","EX_QuitEXMode",1)
+        RegisterKey("~+esc","EX_QuitEXMode",1)
+        RegisterKey("~+alt","EX_QuitEXMode",1)
     }
     else{
-        CloseEXFunc()
+        script_state:=0
+        printm("关闭维尔脚本")
+        RegisterKey(exkey,"EX_EnterEXMode",0)
+        RegisterKey("~m","EX_QuitEXMode",0)
+        RegisterKey("~esc","EX_QuitEXMode",0)
+        RegisterKey("~alt","EX_QuitEXMode",0)
+        RegisterKey("~+m","EX_QuitEXMode",0)
+        RegisterKey("~+esc","EX_QuitEXMode",0)
+        RegisterKey("~+alt","EX_QuitEXMode",0)
     }
 }
 
-if (EXScript_defalutOn){
-    OpenEXFunc()
+EX_ToggleAutoLeftMode(){
+    if (EX_AutoLeftMode){
+        EX_AutoLeftMode:=0
+        printm("关闭变身期间自动左键")
+    }
+    else{
+        EX_AutoLeftMode:=1
+        printm("开启变身期间自动左键")
+    }
+}
+EX_ToggleScript()  ;默认开启维尔脚本
+RegisterKey("f4","EX_ToggleScript",1)
+RegisterKey("f6","EX_ToggleAutoLeftMode",1)
+;=====================================================================================
+;                                    奶僧
+;=====================================================================================
+global hm_timer_intrvl:=1000 ;默认计时间隔
+
+;技能按键
+global 救赎真言:=2
+global 飓风破:=3
+global 灵光悟:=4
+
+;主循环
+hm_mainTimer(){
+    static 救赎真言_cooldown:=0
+    static 飓风破_cooldown:=0
+
+    printm(a)
+    if (救赎真言_cooldown>=3000){
+        send %救赎真言%
+        救赎真言_cooldown:=0
+    }
+
+    飓风破_cooldown+=hm_timer_intrvl
+    if (飓风破_cooldown>=5000){
+        send %飓风破%
+        飓风破_cooldown:=0
+    }
+
+    send %灵光悟%
 }
 
-shiftup1(){
-    debugmsg("侦测到shift松开")
+
+hm_ToggleScript(){
+    static Hm_script_state:=0
+    fn:=Func("hm_mainTimer")
+    if (Hm_script_state==0){
+        printm("奶僧宏开启")
+        Hm_script_state:=1
+        SetTimer,% fn,%hm_timer_intrvl%
+        send %灵光悟% %救赎真言% %飓风破%
+    }
+    else{
+        printm("奶僧宏关闭")
+        Hm_script_state:=0
+        SetTimer,% fn,off
+    }
 }
 
-RegisterKey("~shift up","shiftup1",1)
-RegisterKey("f4","ToggleEXFunc",1)
-;===============================================
-;快速回城，传送和切换
+RegisterKey("f3","hm_ToggleScript",1)
+;=====================================================================================
+;                               快速回城，传送和切换
+;=====================================================================================
+
 global qs_on:=0      ;快速传送
 global qs_num:=4     ;初始窗口数量
 
