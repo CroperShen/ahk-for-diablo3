@@ -1,4 +1,4 @@
-SetKeyDelay -1
+SetKeyDelay 10
 
 global TESTMODE:=0 ;测试模式
 ;==============================================================================================
@@ -280,6 +280,15 @@ EX_ToggleAutoLeftMode(){
     if (EX_AutoLeftMode){
         EX_AutoLeftMode:=0
         printm("关闭变身期间自动左键")
+
+        debugmsg("注销变身期间左键设置")
+        RegisterKey("$LButton","EX_LButtonDown",0)
+        RegisterKey("$LButton Up","EX_LButtonUp",0)
+        RegisterKey("$+LButton","EX_LButtonDown",0)
+        RegisterKey("$+LButton Up","EX_LButtonUp",0)     
+        sleep 50  
+        debugmsg("退出变身：注销自动按下左键")
+        EX_QuitAutoLeft()
     }
     else{
         EX_AutoLeftMode:=1
@@ -304,7 +313,7 @@ hm_mainTimer(){
     static 救赎真言_cooldown:=0
     static 飓风破_cooldown:=0
 
-    printm(a)
+    救赎真言_cooldown+=hm_timer_intrvl
     if (救赎真言_cooldown>=3000){
         send %救赎真言%
         救赎真言_cooldown:=0
@@ -350,8 +359,9 @@ qswitch(){
     send {alt down}
     RegisterKey("alt up","null",1)
     while (i<qs_num){
-        sleep 50
+        sleep 10
         send {tab}
+        sleep 10
         i++
     }
     RegisterKey("alt up","null",0)
